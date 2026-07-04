@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { Post, Comment } from '../types';
 import { extractHashtags, estimateReadTime } from '../algorithms/content';
+import { REALTIME_SUBSCRIBE_STATES } from '@supabase/supabase-js';
 
 // Re-export for backward compatibility
 export type { Post, Comment };
@@ -695,11 +696,26 @@ export const postService = {
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'posts', filter: 'privacy=eq.public' },
         async () => {
-          const posts = await postService.getPosts();
-          onUpdate(posts);
+          try {
+            const posts = await postService.getPosts();
+            onUpdate(posts);
+          } catch (err) {
+            if (onError) onError(err);
+          }
         }
       )
-      .subscribe();
+      .subscribe(async (status) => {
+        if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+          try {
+            const posts = await postService.getPosts();
+            onUpdate(posts);
+          } catch (err) {
+            if (onError) onError(err);
+          }
+        } else if (onError) {
+          onError(new Error(`Subscription status: ${status}`));
+        }
+      });
 
     return () => {
       subscription.unsubscribe();
