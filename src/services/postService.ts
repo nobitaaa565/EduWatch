@@ -726,13 +726,28 @@ export const postService = {
     const subscription = supabase
       .channel(`timeline-${uid}`)
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'posts', filter: `author_id=eq.${uid}` },
+        { event: '*', schema: 'public', table: 'posts' },
         async () => {
-          const posts = await postService.getUserTimeline(uid);
-          onUpdate(posts);
+          try {
+            const posts = await postService.getUserTimeline(uid);
+            onUpdate(posts);
+          } catch (err) {
+            if (onError) onError(err);
+          }
         }
       )
-      .subscribe();
+      .subscribe(async (status) => {
+        if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
+          try {
+            const posts = await postService.getUserTimeline(uid);
+            onUpdate(posts);
+          } catch (err) {
+            if (onError) onError(err);
+          }
+        } else if (onError) {
+          onError(new Error(`Subscription status: ${status}`));
+        }
+      });
 
     return () => {
       subscription.unsubscribe();
