@@ -1,0 +1,6 @@
+{
+  "name": "Remix: EduWatch",
+  "description": "The ultimate hub for educational insights, pedagogy, and EdTech analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
