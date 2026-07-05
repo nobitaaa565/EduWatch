@@ -371,7 +371,9 @@ export const postService = {
     const wasDownvoted = downvotedPosts.includes(postId);
     const nowLiked = !wasLiked;
 
-    const oldInter = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0}');
+    const delta = JSON.parse(localStorage.getItem(`delta_${postId}`) || '{"upvotes":0,"downvotes":0}');
+    const deltaUp = (nowLiked ? 1 : -1) - (wasDownvoted ? -1 : 0);
+    const deltaDown = wasDownvoted ? -1 : 0;
 
     localStorage.setItem('liked_posts', JSON.stringify(
       wasLiked ? likedPosts.filter(id => id !== postId) : [...likedPosts, postId]
@@ -382,16 +384,13 @@ export const postService = {
       ));
     }
 
-    localStorage.setItem(`interactions_${postId}`, JSON.stringify({
-      upvotes: Math.max(0, oldInter.upvotes + (nowLiked ? 1 : -1)),
-      downvotes: wasDownvoted ? Math.max(0, oldInter.downvotes - 1) : oldInter.downvotes,
+    localStorage.setItem(`delta_${postId}`, JSON.stringify({
+      upvotes: Math.max(-999, (delta.upvotes || 0) + deltaUp),
+      downvotes: Math.max(-999, (delta.downvotes || 0) + deltaDown),
     }));
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) {
-      const cached = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0}');
-      return { upvotes: cached.upvotes || 0, downvotes: cached.downvotes || 0, isLiked: nowLiked };
-    }
+    if (!authUser) return { upvotes: 0, downvotes: 0, isLiked: nowLiked };
 
     const { data: userRow } = await supabase
       .from('users')
@@ -417,7 +416,12 @@ export const postService = {
         isLiked = true;
       }
     } else {
-      await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'up' });
+      const { error: insertErr } = await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'up' });
+      if (insertErr) {
+        console.error('toggleLike insert error:', insertErr);
+        localStorage.setItem(`delta_${postId}`, JSON.stringify({ upvotes: 0, downvotes: 0 }));
+        return { upvotes: 0, downvotes: 0, isLiked: false };
+      }
       isLiked = true;
     }
 
@@ -427,14 +431,7 @@ export const postService = {
     const upvotes = counts?.upvotes || 0;
     const downvotes = counts?.downvotes || 0;
     localStorage.setItem(`interactions_${postId}`, JSON.stringify({ upvotes, downvotes }));
-
-    const likedFinal: string[] = JSON.parse(localStorage.getItem('liked_posts') || '[]');
-    const downvotedFinal: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
-    const filteredLiked = likedFinal.filter(id => id !== postId);
-    const filteredDownvoted = downvotedFinal.filter(id => id !== postId);
-    if (isLiked) filteredLiked.push(postId);
-    localStorage.setItem('liked_posts', JSON.stringify(filteredLiked));
-    localStorage.setItem('downvoted_posts', JSON.stringify(filteredDownvoted));
+    localStorage.setItem(`delta_${postId}`, JSON.stringify({ upvotes: 0, downvotes: 0 }));
 
     return { upvotes, downvotes, isLiked };
   },
@@ -446,7 +443,7 @@ export const postService = {
     const wasLiked = likedPosts.includes(postId);
     const nowDownvoted = !wasDownvoted;
 
-    const oldInter = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0}');
+    const delta = JSON.parse(localStorage.getItem(`delta_${postId}`) || '{"upvotes":0,"downvotes":0}');
 
     localStorage.setItem('downvoted_posts', JSON.stringify(
       wasDownvoted ? downvotedPosts.filter(id => id !== postId) : [...downvotedPosts, postId]
@@ -457,9 +454,9 @@ export const postService = {
       ));
     }
 
-    localStorage.setItem(`interactions_${postId}`, JSON.stringify({
-      upvotes: wasLiked ? Math.max(0, oldInter.upvotes - 1) : oldInter.upvotes,
-      downvotes: Math.max(0, oldInter.downvotes + (nowDownvoted ? 1 : -1)),
+    localStorage.setItem(`delta_${postId}`, JSON.stringify({
+      upvotes: Math.max(-999, (delta.upvotes || 0) + (wasLiked ? -1 : 0)),
+      downvotes: Math.max(-999, (delta.downvotes || 0) + (nowDownvoted ? 1 : -1)),
     }));
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -489,7 +486,12 @@ export const postService = {
         isDownvoted = true;
       }
     } else {
-      await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'down' });
+      const { error: insertErr } = await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'down' });
+      if (insertErr) {
+        console.error('toggleDownvote insert error:', insertErr);
+        localStorage.setItem(`delta_${postId}`, JSON.stringify({ upvotes: 0, downvotes: 0 }));
+        return { upvotes: 0, downvotes: 0, isDownvoted: false };
+      }
       isDownvoted = true;
     }
 
@@ -499,14 +501,7 @@ export const postService = {
     const upvotes = counts?.upvotes || 0;
     const downvotes = counts?.downvotes || 0;
     localStorage.setItem(`interactions_${postId}`, JSON.stringify({ upvotes, downvotes }));
-
-    const likedFinal: string[] = JSON.parse(localStorage.getItem('liked_posts') || '[]');
-    const downvotedFinal: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
-    const filteredLiked = likedFinal.filter(id => id !== postId);
-    const filteredDownvoted = downvotedFinal.filter(id => id !== postId);
-    if (isDownvoted) filteredDownvoted.push(postId);
-    localStorage.setItem('liked_posts', JSON.stringify(filteredLiked));
-    localStorage.setItem('downvoted_posts', JSON.stringify(filteredDownvoted));
+    localStorage.setItem(`delta_${postId}`, JSON.stringify({ upvotes: 0, downvotes: 0 }));
 
     return { upvotes, downvotes, isDownvoted };
   },
@@ -565,15 +560,20 @@ export const postService = {
     if (!localStorage.getItem(key)) {
       localStorage.setItem(key, JSON.stringify({ upvotes: upvotes || 0, downvotes: downvotes || 0, comments: 0, shares: 0 }));
     }
+    // Always update the DB baseline to keep counts fresh for other users' votes.
+    // The delta_ key separately tracks the current user's pending changes.
+    localStorage.setItem(key, JSON.stringify({ upvotes: upvotes || 0, downvotes: downvotes || 0, comments: 0, shares: 0 }));
   },
 
   getExtraInteractions: (postId: string): { upvotes: number, downvotes: number, comments: number, shares: number } => {
-    const key = `interactions_${postId}`;
-    const value = localStorage.getItem(key);
-    if (value) {
-      return JSON.parse(value);
-    }
-    return { upvotes: 0, downvotes: 0, comments: 0, shares: 0 };
+    const cached = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0,"comments":0,"shares":0}');
+    const delta = JSON.parse(localStorage.getItem(`delta_${postId}`) || '{"upvotes":0,"downvotes":0}');
+    return {
+      upvotes: Math.max(0, (cached.upvotes || 0) + (delta.upvotes || 0)),
+      downvotes: Math.max(0, (cached.downvotes || 0) + (delta.downvotes || 0)),
+      comments: cached.comments || 0,
+      shares: cached.shares || 0,
+    };
   },
 
   getAllPosts: async (): Promise<Post[]> => {
