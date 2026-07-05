@@ -176,6 +176,7 @@ export class UserService {
       const existing = await this.getUserProfile(authUser.id);
 
       const dbProfile: any = {
+        auth_id: authUser.id,
         username: profile.username || authUser.email?.split('@')[0] || 'user',
         full_name: profile.fullName || authUser.user_metadata?.full_name || 'User',
         email: profile.email || authUser.email || '',
