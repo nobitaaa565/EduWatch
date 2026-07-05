@@ -107,6 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
+        redirectTo: window.location.origin,
         queryParams: {
           prompt: 'select_account',
         },
@@ -120,6 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sessionStorage.removeItem('feed_scroll_pos');
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'facebook',
+      options: {
+        redirectTo: window.location.origin,
+      },
     });
     if (error) throw error;
   };
