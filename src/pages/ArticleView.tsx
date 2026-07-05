@@ -1119,8 +1119,8 @@ function CommentItem({ comment, onReply, depth = 0 }: { comment: any; onReply: (
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [likes, setLikes] = useState(comment.likes);
-  const [isUpvoted, setIsUpvoted] = useState(postService.isCommentLiked(comment.id));
-  const [isDownvoted, setIsDownvoted] = useState(postService.isCommentDownvoted(comment.id));
+  const [isUpvoted, setIsUpvoted] = useState(postService.isCommentLiked(postId || '', comment.id));
+  const [isDownvoted, setIsDownvoted] = useState(postService.isCommentDownvoted(postId || '', comment.id));
 
   const handleUpvote = () => {
     if (!postId) return;
@@ -1128,18 +1128,15 @@ function CommentItem({ comment, onReply, depth = 0 }: { comment: any; onReply: (
     if (result.comment) {
       setLikes(result.comment.likes);
       setIsUpvoted(result.isLiked);
-      setIsDownvoted(postService.isCommentDownvoted(comment.id));
+      setIsDownvoted(postService.isCommentDownvoted(postId, comment.id));
     }
   };
 
   const handleDownvote = () => {
     if (!postId) return;
     const result = postService.toggleCommentDownvote(postId, comment.id);
-    if (result.comment) {
-      setLikes(result.comment.likes);
-      setIsDownvoted(result.isDownvoted);
-      setIsUpvoted(postService.isCommentLiked(comment.id));
-    }
+    setIsDownvoted(result.isDownvoted);
+    setIsUpvoted(postService.isCommentLiked(postId, comment.id));
   };
 
   return (

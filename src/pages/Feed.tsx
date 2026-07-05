@@ -410,83 +410,18 @@ export default function Feed() {
 
   const handleToggleLike = (postId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    // 1. Determine local interactive state instantly from cache
-    const isLikedBefore = postService.isPostLiked(postId);
-    const isDownvotedBefore = postService.isPostDownvoted(postId);
-    
-    const isLikedAfter = !isLikedBefore;
-    const upvoteDelta = isLikedAfter ? 1 : -1;
-    const downvoteDelta = (isLikedAfter && isDownvotedBefore) ? -1 : 0;
-    
-    // 2. Instantly update UI state in this render frame (absolutely zero delay!)
-    setDisplayFeed(prev => prev.map(post => {
-      if (post.id === postId) {
-        const currentUpvotes = 'upvotes' in post ? (post.upvotes || 0) : ('likes' in post ? (post.likes || 0) : 0);
-        const currentDownvotes = (post as any).downvotes || 0;
-        
-        const nextUpvotes = Math.max(0, currentUpvotes + upvoteDelta);
-        const nextDownvotes = Math.max(0, currentDownvotes + downvoteDelta);
-        
-        return { 
-          ...post, 
-          upvotes: nextUpvotes, 
-          downvotes: nextDownvotes,
-          likes: nextUpvotes // for compatibility with legacy like properties
-        }; 
-      }
-      return post;
-    }));
-
-    // 3. Initiate the backend update in the background (no await)
-    postService.toggleLike(postId).catch(err => {
-      console.warn("Error in background upvote:", err);
-    });
+    postService.toggleLike(postId);
+    setDisplayFeed(prev => prev.map(post =>
+      post.id === postId ? { ...post } : post
+    ));
   };
 
   const handleToggleDownvote = (postId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    // 1. Determine local interactive state instantly from cache
-    const isLikedBefore = postService.isPostLiked(postId);
-    const isDownvotedBefore = postService.isPostDownvoted(postId);
-    
-    const isDownvotedAfter = !isDownvotedBefore;
-    const downvoteDelta = isDownvotedAfter ? 1 : -1;
-    const upvoteDelta = (isDownvotedAfter && isLikedBefore) ? -1 : 0;
-    
-    // 2. Instantly update UI state in this render frame (absolutely zero delay!)
-    setDisplayFeed(prev => prev.map(post => {
-      if (post.id === postId) {
-        const currentUpvotes = 'upvotes' in post ? (post.upvotes || 0) : ('likes' in post ? (post.likes || 0) : 0);
-        const currentDownvotes = (post as any).downvotes || 0;
-        
-        const nextUpvotes = Math.max(0, currentUpvotes + upvoteDelta);
-        const nextDownvotes = Math.max(0, currentDownvotes + downvoteDelta);
-        
-        return { 
-          ...post, 
-          upvotes: nextUpvotes, 
-          downvotes: nextDownvotes,
-          likes: nextUpvotes // for compatibility with legacy like properties
-        }; 
-      }
-      return post;
-    }));
-
-    // 3. Initiate the backend update in the background (no await)
-    postService.toggleDownvote(postId).catch(err => {
-      console.warn("Error in background downvote:", err);
-    });
-  };
-
-  const handleLocalUpdate = (postId: string) => {
-    setDisplayFeed(prev => prev.map(post => {
-      if (post.id === postId) {
-        return { ...post }; // Create a new object to trigger React update
-      }
-      return post;
-    }));
+    postService.toggleDownvote(postId);
+    setDisplayFeed(prev => prev.map(post =>
+      post.id === postId ? { ...post } : post
+    ));
   };
 
   return (
@@ -645,7 +580,7 @@ export default function Feed() {
             post={selectedPostModal}
             isOpen={!!selectedPostModal}
             onClose={() => setSelectedPostModal(null)}
-            onUpdate={() => handleLocalUpdate(selectedPostModal.id)}
+            onUpdate={() => setDisplayFeed(prev => prev.map(p => p.id === selectedPostModal.id ? { ...p } : p))}
           />
         )}
       </AnimatePresence>

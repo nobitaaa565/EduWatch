@@ -346,10 +346,32 @@ export const postService = {
   },
 
   toggleLike: async (postId: string): Promise<{ upvotes: number, downvotes: number, isLiked: boolean }> => {
+    const likedPosts: string[] = JSON.parse(localStorage.getItem('liked_posts') || '[]');
+    const downvotedPosts: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
+    const wasLiked = likedPosts.includes(postId);
+    const wasDownvoted = downvotedPosts.includes(postId);
+    const nowLiked = !wasLiked;
+
+    const oldInter = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0}');
+
+    localStorage.setItem('liked_posts', JSON.stringify(
+      wasLiked ? likedPosts.filter(id => id !== postId) : [...likedPosts, postId]
+    ));
+    if (wasDownvoted) {
+      localStorage.setItem('downvoted_posts', JSON.stringify(
+        downvotedPosts.filter(id => id !== postId)
+      ));
+    }
+
+    localStorage.setItem(`interactions_${postId}`, JSON.stringify({
+      upvotes: Math.max(0, oldInter.upvotes + (nowLiked ? 1 : -1)),
+      downvotes: wasDownvoted ? Math.max(0, oldInter.downvotes - 1) : oldInter.downvotes,
+    }));
+
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) {
       const cached = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0}');
-      return { upvotes: cached.upvotes || 0, downvotes: cached.downvotes || 0, isLiked: false };
+      return { upvotes: cached.upvotes || 0, downvotes: cached.downvotes || 0, isLiked: nowLiked };
     }
 
     const { data: userRow } = await supabase
@@ -358,7 +380,7 @@ export const postService = {
       .eq('auth_id', authUser.id)
       .single();
 
-    if (!userRow) return { upvotes: 0, downvotes: 0, isLiked: false };
+    if (!userRow) return { upvotes: 0, downvotes: 0, isLiked: nowLiked };
 
     const { data: existing } = await supabase
       .from('post_votes')
@@ -387,12 +409,42 @@ export const postService = {
     const downvotes = counts?.downvotes || 0;
     localStorage.setItem(`interactions_${postId}`, JSON.stringify({ upvotes, downvotes }));
 
+    const likedFinal: string[] = JSON.parse(localStorage.getItem('liked_posts') || '[]');
+    const downvotedFinal: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
+    const filteredLiked = likedFinal.filter(id => id !== postId);
+    const filteredDownvoted = downvotedFinal.filter(id => id !== postId);
+    if (isLiked) filteredLiked.push(postId);
+    localStorage.setItem('liked_posts', JSON.stringify(filteredLiked));
+    localStorage.setItem('downvoted_posts', JSON.stringify(filteredDownvoted));
+
     return { upvotes, downvotes, isLiked };
   },
 
   toggleDownvote: async (postId: string): Promise<{ upvotes: number, downvotes: number, isDownvoted: boolean }> => {
+    const likedPosts: string[] = JSON.parse(localStorage.getItem('liked_posts') || '[]');
+    const downvotedPosts: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
+    const wasDownvoted = downvotedPosts.includes(postId);
+    const wasLiked = likedPosts.includes(postId);
+    const nowDownvoted = !wasDownvoted;
+
+    const oldInter = JSON.parse(localStorage.getItem(`interactions_${postId}`) || '{"upvotes":0,"downvotes":0}');
+
+    localStorage.setItem('downvoted_posts', JSON.stringify(
+      wasDownvoted ? downvotedPosts.filter(id => id !== postId) : [...downvotedPosts, postId]
+    ));
+    if (wasLiked) {
+      localStorage.setItem('liked_posts', JSON.stringify(
+        likedPosts.filter(id => id !== postId)
+      ));
+    }
+
+    localStorage.setItem(`interactions_${postId}`, JSON.stringify({
+      upvotes: wasLiked ? Math.max(0, oldInter.upvotes - 1) : oldInter.upvotes,
+      downvotes: Math.max(0, oldInter.downvotes + (nowDownvoted ? 1 : -1)),
+    }));
+
     const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return { upvotes: 0, downvotes: 0, isDownvoted: false };
+    if (!authUser) return { upvotes: 0, downvotes: 0, isDownvoted: nowDownvoted };
 
     const { data: userRow } = await supabase
       .from('users')
@@ -400,7 +452,7 @@ export const postService = {
       .eq('auth_id', authUser.id)
       .single();
 
-    if (!userRow) return { upvotes: 0, downvotes: 0, isDownvoted: false };
+    if (!userRow) return { upvotes: 0, downvotes: 0, isDownvoted: nowDownvoted };
 
     const { data: existing } = await supabase
       .from('post_votes')
@@ -422,7 +474,22 @@ export const postService = {
       isDownvoted = true;
     }
 
-    return { upvotes: 0, downvotes: isDownvoted ? 1 : 0, isDownvoted };
+    const { data: counts } = await supabase
+      .rpc('get_vote_counts', { p_post_id: postId });
+
+    const upvotes = counts?.upvotes || 0;
+    const downvotes = counts?.downvotes || 0;
+    localStorage.setItem(`interactions_${postId}`, JSON.stringify({ upvotes, downvotes }));
+
+    const likedFinal: string[] = JSON.parse(localStorage.getItem('liked_posts') || '[]');
+    const downvotedFinal: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
+    const filteredLiked = likedFinal.filter(id => id !== postId);
+    const filteredDownvoted = downvotedFinal.filter(id => id !== postId);
+    if (isDownvoted) filteredDownvoted.push(postId);
+    localStorage.setItem('liked_posts', JSON.stringify(filteredLiked));
+    localStorage.setItem('downvoted_posts', JSON.stringify(filteredDownvoted));
+
+    return { upvotes, downvotes, isDownvoted };
   },
 
   isPostLiked: (postId: string): boolean => {
@@ -579,15 +646,43 @@ export const postService = {
   },
 
   toggleCommentLike: (postId: string, commentId: string): { comment: Comment | null, isLiked: boolean } => {
-    return { comment: null, isLiked: false };
+    const key = `comment_likes_${postId}`;
+    const liked: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+    const wasLiked = liked.includes(commentId);
+    const updated = wasLiked ? liked.filter(id => id !== commentId) : [...liked, commentId];
+    localStorage.setItem(key, JSON.stringify(updated));
+
+    const commentsKey = `comments_${postId}`;
+    const comments = JSON.parse(localStorage.getItem(commentsKey) || '[]');
+    const updatedComments = comments.map((c: any) => {
+      if (c.id === commentId) {
+        return { ...c, likes: Math.max(0, (c.likes || 0) + (wasLiked ? -1 : 1)) };
+      }
+      return c;
+    });
+    localStorage.setItem(commentsKey, JSON.stringify(updatedComments));
+
+    const comment = updatedComments.find((c: any) => c.id === commentId) || null;
+    return { comment, isLiked: !wasLiked };
   },
 
   toggleCommentDownvote: (postId: string, commentId: string): { comment: Comment | null, isDownvoted: boolean } => {
-    return { comment: null, isDownvoted: false };
+    const key = `comment_downvotes_${postId}`;
+    const downvoted: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+    const wasDownvoted = downvoted.includes(commentId);
+    const updated = wasDownvoted ? downvoted.filter(id => id !== commentId) : [...downvoted, commentId];
+    localStorage.setItem(key, JSON.stringify(updated));
+    return { comment: null, isDownvoted: !wasDownvoted };
   },
 
-  isCommentLiked: (commentId: string): boolean => false,
-  isCommentDownvoted: (commentId: string): boolean => false,
+  isCommentLiked: (postId: string, commentId: string): boolean => {
+    const liked: string[] = JSON.parse(localStorage.getItem(`comment_likes_${postId}`) || '[]');
+    return liked.includes(commentId);
+  },
+  isCommentDownvoted: (postId: string, commentId: string): boolean => {
+    const downvoted: string[] = JSON.parse(localStorage.getItem(`comment_downvotes_${postId}`) || '[]');
+    return downvoted.includes(commentId);
+  },
 
   addReply: (postId: string, parentCommentId: string, replyData: { authorId: string, authorName: string, authorImage: string, text: string }): Comment[] => {
     try {

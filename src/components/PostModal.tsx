@@ -172,9 +172,11 @@ export const PostModal = ({ post, isOpen, onClose, onUpdate }: PostModalProps) =
     if (onUpdate) onUpdate();
   };
 
-  const handleCommentLike = (commentId: string) => {
-    postService.toggleCommentLike(post.id, commentId);
-    loadData();
+  const handleCommentLike = async (commentId: string) => {
+    const result = postService.toggleCommentLike(post.id, commentId);
+    if (result.comment) {
+      setComments(prev => prev.map(c => c.id === commentId ? { ...c, likes: (result.comment as any).likes || 0 } : c));
+    }
   };
 
   const handleReplyClick = (comment: Comment) => {
@@ -183,15 +185,10 @@ export const PostModal = ({ post, isOpen, onClose, onUpdate }: PostModalProps) =
   };
 
   const CommentItem = ({ comment, isReply = false }: { comment: Comment, isReply?: boolean }) => {
-    const isLiked = postService.isCommentLiked(comment.id);
+    const isLiked = postService.isCommentLiked(post.id, comment.id);
     
     return (
-      <motion.div 
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-        layout
-        className={cn("flex flex-col gap-1", isReply ? "ml-10 mt-2" : "mt-4")}
+      <div className={cn("flex flex-col gap-1", isReply ? "ml-10 mt-2" : "mt-4")}
       >
         <div className="flex gap-2">
           <img 
@@ -241,7 +238,7 @@ export const PostModal = ({ post, isOpen, onClose, onUpdate }: PostModalProps) =
             ))}
           </div>
         )}
-      </motion.div>
+      </div>
     );
   };
 

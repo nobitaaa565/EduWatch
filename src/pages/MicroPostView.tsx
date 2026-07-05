@@ -756,13 +756,7 @@ function CommentItem({ comment }: { comment: Comment }) {
   };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      layout
-      className="flex gap-3"
-    >
+    <div className="flex gap-3">
       <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-outline-variant/10">
         <img src={comment.author.img} alt={comment.author.name} className="w-full h-full object-cover" />
       </div>
@@ -807,6 +801,6 @@ function CommentItem({ comment }: { comment: Comment }) {
           <span className="text-[10px] text-outline-variant uppercase font-black uppercase tracking-widest ml-auto">{comment.timestamp}</span>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }

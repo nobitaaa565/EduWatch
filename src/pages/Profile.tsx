@@ -908,33 +908,15 @@ export default function Profile() {
                           toggleExpand={toggleExpand}
                           onShareSuccess={() => setRepostTrigger(prev => prev + 1)}
                           handlePostAction={(p, fromMedia) => handlePostAction(p as any, fromMedia)}
-                          handleToggleLike={async (postId, e) => {
+                          handleToggleLike={(postId, e) => {
                             e.stopPropagation();
-                            const res = await postService.toggleLike(postId);
-                            setUserPosts(userPosts.map(p => {
-                              if (p.id === postId) {
-                                return {
-                                  ...p,
-                                  upvotes: res.upvotes,
-                                  downvotes: res.downvotes
-                                };
-                              }
-                              return p;
-                            }));
+                            postService.toggleLike(postId);
+                            setUserPosts(userPosts.map(p => p.id === postId ? { ...p } : p));
                           }}
-                          handleToggleDownvote={async (postId, e) => {
+                          handleToggleDownvote={(postId, e) => {
                             e.stopPropagation();
-                            const res = await postService.toggleDownvote(postId);
-                            setUserPosts(userPosts.map(p => {
-                              if (p.id === postId) {
-                                return {
-                                  ...p,
-                                  upvotes: res.upvotes,
-                                  downvotes: res.downvotes
-                                };
-                              }
-                              return p;
-                            }));
+                            postService.toggleDownvote(postId);
+                            setUserPosts(userPosts.map(p => p.id === postId ? { ...p } : p));
                           }}
                           showMenu={true}
                           onMenuEdit={(item) => {
