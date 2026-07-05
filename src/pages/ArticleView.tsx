@@ -216,13 +216,15 @@ export default function ArticleView() {
         async () => {
           const { data } = await supabase.from('posts').select('*, users!inner(full_name, username, avatar_url)').eq('id', id).single();
           if (data) {
-            const upvotesVal = 0;
-            const downvotesVal = 0;
-
+            // Update comments/shares in interactions cache without overwriting vote counts
             const intKey = `interactions_${id}`;
-            const commentsVal = data.comments || 0;
-            const sharesVal = data.shares || 0;
-            localStorage.setItem(intKey, JSON.stringify({ upvotes: upvotesVal, downvotes: downvotesVal, comments: commentsVal, shares: sharesVal }));
+            const existing = JSON.parse(localStorage.getItem(intKey) || '{"upvotes":0,"downvotes":0,"comments":0,"shares":0}');
+            localStorage.setItem(intKey, JSON.stringify({
+              upvotes: existing.upvotes || 0,
+              downvotes: existing.downvotes || 0,
+              comments: data.comments || 0,
+              shares: data.shares || 0,
+            }));
 
             setLocalArticle({
               id,
@@ -237,11 +239,11 @@ export default function ArticleView() {
               readTime: Math.max(1, Math.ceil((data.content || '').split(/\s+/).length / 200)),
               words: (data.content || '').split(/\s+/).length,
               createdAt: data.created_at,
-              likes: upvotesVal,
-              upvotes: upvotesVal,
-              downvotes: downvotesVal,
-              comments: commentsVal,
-              shares: sharesVal,
+              likes: existing.upvotes || 0,
+              upvotes: existing.upvotes || 0,
+              downvotes: existing.downvotes || 0,
+              comments: existing.comments || 0,
+              shares: existing.shares || 0,
               saves: 0,
               commentsEnabled: data.comments_enabled,
             } as any);
@@ -306,15 +308,9 @@ export default function ArticleView() {
       setIsLiked(liked);
       setIsDownvoted(postService.isPostDownvoted(id));
       
-      if (id.startsWith('static')) {
-        const extra = postService.getExtraInteractions(id);
-        const baseUpvotes = 'likes' in articleData ? (typeof articleData.likes === 'number' ? articleData.likes : 0) : 0;
-        setUpvotes(baseUpvotes + (extra.upvotes || 0));
-        setDownvotes(extra.downvotes || 0);
-      } else {
-        setUpvotes(articleData.upvotes || 0);
-        setDownvotes(articleData.downvotes || 0);
-      }
+      const extra = postService.getExtraInteractions(id);
+      setUpvotes(extra.upvotes || 0);
+      setDownvotes(extra.downvotes || 0);
     }
   }, [id, articleData]);
 
@@ -347,23 +343,25 @@ export default function ArticleView() {
     };
   }, []);
 
-  const handleLikeArticle = async () => {
+  const handleLikeArticle = () => {
     if (id) {
-      const result = await postService.toggleLike(id);
-      setIsLiked(result.isLiked);
+      postService.toggleLike(id);
+      const extra = postService.getExtraInteractions(id);
+      setIsLiked(postService.isPostLiked(id));
       setIsDownvoted(false);
-      setUpvotes(result.upvotes);
-      setDownvotes(result.downvotes);
+      setUpvotes(extra.upvotes || 0);
+      setDownvotes(extra.downvotes || 0);
     }
   };
 
-  const handleDownvoteArticle = async () => {
+  const handleDownvoteArticle = () => {
     if (id) {
-      const result = await postService.toggleDownvote(id);
-      setIsDownvoted(result.isDownvoted);
+      postService.toggleDownvote(id);
+      const extra = postService.getExtraInteractions(id);
+      setIsDownvoted(postService.isPostDownvoted(id));
       setIsLiked(false);
-      setUpvotes(result.upvotes);
-      setDownvotes(result.downvotes);
+      setUpvotes(extra.upvotes || 0);
+      setDownvotes(extra.downvotes || 0);
     }
   };
 

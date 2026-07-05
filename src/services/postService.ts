@@ -75,13 +75,28 @@ interface PostRow {
   users?: { full_name: string; username: string; avatar_url: string };
 }
 
-function mapRowToPost(row: PostRow): Post {
-  const upvotes = 0;
-  const downvotes = 0;
-  const comments = 0;
-  const shares = 0;
-  const saves = 0;
+async function enrichWithVoteCounts(rows: PostRow[]) {
+  const postIds = rows.map(r => r.id);
+  if (postIds.length === 0) return;
+  const { data: votes } = await supabase
+    .from('post_votes')
+    .select('post_id, vote_type')
+    .in('post_id', postIds);
+  const voteMap: Record<string, { upvotes: number; downvotes: number }> = {};
+  for (const v of (votes || [])) {
+    if (!voteMap[v.post_id]) voteMap[v.post_id] = { upvotes: 0, downvotes: 0 };
+    if (v.vote_type === 'up') voteMap[v.post_id].upvotes++;
+    else voteMap[v.post_id].downvotes++;
+  }
+  for (const row of rows) {
+    const counts = voteMap[row.id];
+    if (counts) {
+      postService.initInteractions(row.id, counts.upvotes, counts.downvotes);
+    }
+  }
+}
 
+function mapRowToPost(row: PostRow): Post {
   const intKey = `interactions_${row.id}`;
   try {
     const cached = localStorage.getItem(intKey);
@@ -133,12 +148,12 @@ function mapRowToPost(row: PostRow): Post {
     readTime: Math.max(1, Math.ceil((row.content || '').split(/\s+/).length / 200)),
     words: (row.content || '').split(/\s+/).length,
     createdAt: row.created_at,
-    likes: upvotes,
-    upvotes,
-    downvotes,
-    comments,
-    shares,
-    saves,
+    likes: 0,
+    upvotes: 0,
+    downvotes: 0,
+    comments: 0,
+    shares: 0,
+    saves: 0,
     location: row.location || undefined,
     commentsEnabled: row.comments_enabled,
   };
@@ -155,7 +170,9 @@ export const postService = {
         .limit(100);
 
       if (error) throw error;
-      return (data || []).map((row: any) => mapRowToPost(row));
+      const rows = (data || []) as PostRow[];
+      await enrichWithVoteCounts(rows);
+      return rows.map((row: any) => mapRowToPost(row));
     } catch (error) {
       console.error('Error fetching posts:', error);
       return [];
@@ -255,7 +272,9 @@ export const postService = {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []).map((row: any) => mapRowToPost(row));
+      const rows = (data || []) as PostRow[];
+      await enrichWithVoteCounts(rows);
+      return rows.map((row: any) => mapRowToPost(row));
     } catch (error) {
       console.error('Error fetching user timeline:', error);
       return [];
@@ -769,7 +788,9 @@ export const postService = {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (posts || []).map((row: any) => mapRowToPost(row));
+      const pRows = (posts || []) as PostRow[];
+      await enrichWithVoteCounts(pRows);
+      return pRows.map((row: any) => mapRowToPost(row));
     } catch (error) {
       console.error('Error fetching followers feed:', error);
       return [];
@@ -785,7 +806,9 @@ export const postService = {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []).map((row: any) => mapRowToPost(row));
+      const rows = (data || []) as PostRow[];
+      await enrichWithVoteCounts(rows);
+      return rows.map((row: any) => mapRowToPost(row));
     } catch (error) {
       console.error('Error fetching community feed:', error);
       return [];
