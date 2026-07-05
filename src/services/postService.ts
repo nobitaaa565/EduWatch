@@ -149,7 +149,7 @@ export const postService = {
     try {
       const { data, error } = await supabase
         .from('posts')
-        .select('*, users!inner(full_name, username, avatar_url)')
+        .select('*, users!posts_author_id_fkey!inner(full_name, username, avatar_url)')
         .eq('privacy', 'public')
         .order('created_at', { ascending: false })
         .limit(100);
@@ -250,7 +250,7 @@ export const postService = {
 
       const { data, error } = await supabase
         .from('posts')
-        .select('*, users!inner(full_name, username, avatar_url)')
+        .select('*, users!posts_author_id_fkey!inner(full_name, username, avatar_url)')
         .eq('author_id', userRow.id)
         .order('created_at', { ascending: false });
 
@@ -662,7 +662,7 @@ export const postService = {
 
       const { data: posts, error } = await supabase
         .from('posts')
-        .select('*, users!inner(full_name, username, avatar_url)')
+        .select('*, users!posts_author_id_fkey!inner(full_name, username, avatar_url)')
         .in('author_id', followedIds)
         .order('created_at', { ascending: false });
 
@@ -678,7 +678,7 @@ export const postService = {
     try {
       const { data, error } = await supabase
         .from('posts')
-        .select('*, users!inner(full_name, username, avatar_url)')
+        .select('*, users!posts_author_id_fkey!inner(full_name, username, avatar_url)')
         .contains('communities', [communityName])
         .order('created_at', { ascending: false });
 
