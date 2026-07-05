@@ -369,11 +369,14 @@ export const postService = {
     const downvotedPosts: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
     const wasLiked = likedPosts.includes(postId);
     const wasDownvoted = downvotedPosts.includes(postId);
-    const nowLiked = !wasLiked;
 
     const delta = JSON.parse(localStorage.getItem(`delta_${postId}`) || '{"upvotes":0,"downvotes":0}');
-    const deltaUp = (nowLiked ? 1 : -1) - (wasDownvoted ? -1 : 0);
-    const deltaDown = wasDownvoted ? -1 : 0;
+
+    const rollback = () => {
+      localStorage.setItem('liked_posts', JSON.stringify(likedPosts));
+      localStorage.setItem('downvoted_posts', JSON.stringify(downvotedPosts));
+      localStorage.setItem(`delta_${postId}`, JSON.stringify(delta));
+    };
 
     localStorage.setItem('liked_posts', JSON.stringify(
       wasLiked ? likedPosts.filter(id => id !== postId) : [...likedPosts, postId]
@@ -385,12 +388,12 @@ export const postService = {
     }
 
     localStorage.setItem(`delta_${postId}`, JSON.stringify({
-      upvotes: Math.max(-999, (delta.upvotes || 0) + deltaUp),
-      downvotes: Math.max(-999, (delta.downvotes || 0) + deltaDown),
+      upvotes: Math.max(-999, (delta.upvotes || 0) + (wasLiked ? -1 : 1) - (wasDownvoted ? -1 : 0)),
+      downvotes: Math.max(-999, (delta.downvotes || 0) + (wasDownvoted ? -1 : 0)),
     }));
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return { upvotes: 0, downvotes: 0, isLiked: nowLiked };
+    if (!authUser) { rollback(); return { upvotes: 0, downvotes: 0, isLiked: false }; }
 
     const { data: userRow } = await supabase
       .from('users')
@@ -398,7 +401,7 @@ export const postService = {
       .eq('auth_id', authUser.id)
       .single();
 
-    if (!userRow) return { upvotes: 0, downvotes: 0, isLiked: nowLiked };
+    if (!userRow) { rollback(); return { upvotes: 0, downvotes: 0, isLiked: false }; }
 
     const { data: existing } = await supabase
       .from('post_votes')
@@ -409,20 +412,34 @@ export const postService = {
 
     let isLiked = false;
     if (existing) {
-      if (existing.vote_type === 'up') {
-        await supabase.from('post_votes').delete().eq('post_id', postId).eq('user_id', userRow.id);
-      } else {
-        await supabase.from('post_votes').update({ vote_type: 'up' }).eq('post_id', postId).eq('user_id', userRow.id);
-        isLiked = true;
-      }
-    } else {
-      const { error: insertErr } = await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'up' });
-      if (insertErr) {
-        console.error('toggleLike insert error:', insertErr);
-        localStorage.setItem(`delta_${postId}`, JSON.stringify({ upvotes: 0, downvotes: 0 }));
+      try {
+        if (existing.vote_type === 'up') {
+          const { error: delErr } = await supabase.from('post_votes').delete().eq('post_id', postId).eq('user_id', userRow.id);
+          if (delErr) { rollback(); console.error('toggleLike delete error:', delErr); return { upvotes: 0, downvotes: 0, isLiked: false }; }
+        } else {
+          const { error: updErr } = await supabase.from('post_votes').update({ vote_type: 'up' }).eq('post_id', postId).eq('user_id', userRow.id);
+          if (updErr) { rollback(); console.error('toggleLike update error:', updErr); return { upvotes: 0, downvotes: 0, isLiked: false }; }
+          isLiked = true;
+        }
+      } catch (e) {
+        rollback();
+        console.error('toggleLike DB error:', e);
         return { upvotes: 0, downvotes: 0, isLiked: false };
       }
-      isLiked = true;
+    } else {
+      try {
+        const { error: insertErr } = await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'up' });
+        if (insertErr) {
+          rollback();
+          console.error('toggleLike insert error:', insertErr);
+          return { upvotes: 0, downvotes: 0, isLiked: false };
+        }
+        isLiked = true;
+      } catch (e) {
+        rollback();
+        console.error('toggleLike insert exception:', e);
+        return { upvotes: 0, downvotes: 0, isLiked: false };
+      }
     }
 
     const { data: counts } = await supabase
@@ -441,9 +458,14 @@ export const postService = {
     const downvotedPosts: string[] = JSON.parse(localStorage.getItem('downvoted_posts') || '[]');
     const wasDownvoted = downvotedPosts.includes(postId);
     const wasLiked = likedPosts.includes(postId);
-    const nowDownvoted = !wasDownvoted;
 
     const delta = JSON.parse(localStorage.getItem(`delta_${postId}`) || '{"upvotes":0,"downvotes":0}');
+
+    const rollback = () => {
+      localStorage.setItem('downvoted_posts', JSON.stringify(downvotedPosts));
+      localStorage.setItem('liked_posts', JSON.stringify(likedPosts));
+      localStorage.setItem(`delta_${postId}`, JSON.stringify(delta));
+    };
 
     localStorage.setItem('downvoted_posts', JSON.stringify(
       wasDownvoted ? downvotedPosts.filter(id => id !== postId) : [...downvotedPosts, postId]
@@ -456,11 +478,11 @@ export const postService = {
 
     localStorage.setItem(`delta_${postId}`, JSON.stringify({
       upvotes: Math.max(-999, (delta.upvotes || 0) + (wasLiked ? -1 : 0)),
-      downvotes: Math.max(-999, (delta.downvotes || 0) + (nowDownvoted ? 1 : -1)),
+      downvotes: Math.max(-999, (delta.downvotes || 0) + (wasDownvoted ? -1 : 1)),
     }));
 
     const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) return { upvotes: 0, downvotes: 0, isDownvoted: nowDownvoted };
+    if (!authUser) { rollback(); return { upvotes: 0, downvotes: 0, isDownvoted: false }; }
 
     const { data: userRow } = await supabase
       .from('users')
@@ -468,7 +490,7 @@ export const postService = {
       .eq('auth_id', authUser.id)
       .single();
 
-    if (!userRow) return { upvotes: 0, downvotes: 0, isDownvoted: nowDownvoted };
+    if (!userRow) { rollback(); return { upvotes: 0, downvotes: 0, isDownvoted: false }; }
 
     const { data: existing } = await supabase
       .from('post_votes')
@@ -479,20 +501,34 @@ export const postService = {
 
     let isDownvoted = false;
     if (existing) {
-      if (existing.vote_type === 'down') {
-        await supabase.from('post_votes').delete().eq('post_id', postId).eq('user_id', userRow.id);
-      } else {
-        await supabase.from('post_votes').update({ vote_type: 'down' }).eq('post_id', postId).eq('user_id', userRow.id);
-        isDownvoted = true;
-      }
-    } else {
-      const { error: insertErr } = await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'down' });
-      if (insertErr) {
-        console.error('toggleDownvote insert error:', insertErr);
-        localStorage.setItem(`delta_${postId}`, JSON.stringify({ upvotes: 0, downvotes: 0 }));
+      try {
+        if (existing.vote_type === 'down') {
+          const { error: delErr } = await supabase.from('post_votes').delete().eq('post_id', postId).eq('user_id', userRow.id);
+          if (delErr) { rollback(); console.error('toggleDownvote delete error:', delErr); return { upvotes: 0, downvotes: 0, isDownvoted: false }; }
+        } else {
+          const { error: updErr } = await supabase.from('post_votes').update({ vote_type: 'down' }).eq('post_id', postId).eq('user_id', userRow.id);
+          if (updErr) { rollback(); console.error('toggleDownvote update error:', updErr); return { upvotes: 0, downvotes: 0, isDownvoted: false }; }
+          isDownvoted = true;
+        }
+      } catch (e) {
+        rollback();
+        console.error('toggleDownvote DB error:', e);
         return { upvotes: 0, downvotes: 0, isDownvoted: false };
       }
-      isDownvoted = true;
+    } else {
+      try {
+        const { error: insertErr } = await supabase.from('post_votes').insert({ post_id: postId, user_id: userRow.id, vote_type: 'down' });
+        if (insertErr) {
+          rollback();
+          console.error('toggleDownvote insert error:', insertErr);
+          return { upvotes: 0, downvotes: 0, isDownvoted: false };
+        }
+        isDownvoted = true;
+      } catch (e) {
+        rollback();
+        console.error('toggleDownvote insert exception:', e);
+        return { upvotes: 0, downvotes: 0, isDownvoted: false };
+      }
     }
 
     const { data: counts } = await supabase
