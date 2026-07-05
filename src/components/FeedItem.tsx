@@ -101,6 +101,7 @@ export const FeedItem: React.FC<FeedItemProps> = ({
   useEffect(() => {
     setCommentsList(postService.getComments(item.id));
     setIsBookmarked(postService.isBookmarked(item.id));
+    postService.initInteractions(item.id, (item as any).upvotes || 0, (item as any).downvotes || 0);
   }, [item.id]);
 
   const handleToggleBookmark = (e: React.MouseEvent) => {

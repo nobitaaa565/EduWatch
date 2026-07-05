@@ -121,6 +121,7 @@ export default function MicroPostView() {
         if (found) {
           setPost(found);
           setLikeCount(found.likes || 0);
+          postService.initInteractions(found.id, found.likes || 0, (found as any).downvotes || 0);
 
           // Load and map existing comments
           const dbComments = postService.getComments(id);

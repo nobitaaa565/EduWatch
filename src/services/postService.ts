@@ -541,6 +541,13 @@ export const postService = {
     return isReposted;
   },
 
+  initInteractions: (postId: string, upvotes: number, downvotes: number) => {
+    const key = `interactions_${postId}`;
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, JSON.stringify({ upvotes: upvotes || 0, downvotes: downvotes || 0, comments: 0, shares: 0 }));
+    }
+  },
+
   getExtraInteractions: (postId: string): { upvotes: number, downvotes: number, comments: number, shares: number } => {
     const key = `interactions_${postId}`;
     const value = localStorage.getItem(key);
